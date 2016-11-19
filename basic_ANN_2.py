@@ -1,17 +1,7 @@
 """
-Applies the most basic type of ANN to the IRIS dataset using the Squared-error as a cost function and sigmoid as
-activation.
-
-Shows the huge important of learning rate depending on the batch-size for naive models (Squared error + sigmoid).
-For on-line learning, a learning rate of 1 gives realtively quick convergence.
-For batch of size above 10, the same learning rate throws the weight in a non-recoverable zone. A learning rate of
-    around 0.1 fixes the issue.
-For full-batch learning, the learning rate must be dropped to even less than 0.5.
-A good initial learning_rate here is 1 / n_batch
-
-The issue appears because the model ends up at a situation where either multiple sigmoid values are very close to 1
-(>0.99999) or all values are close to 0 (< 10^(-10), hence the gradient is trapped by the floating errors). If model had
-softmax function, that sort of issue disappears.
+This version is very similar to the previous basic_ANN script, with the exception that the output layer uses a softmax
+ activation function and cross-entropy cost function instead of the (squarred-error, sigmoid) combination. The other
+ hidden layer still use the latter combination.
 
 Dataset taken from http://archive.ics.uci.edu/ml/datasets/Iris
 """
@@ -21,8 +11,14 @@ Dataset taken from http://archive.ics.uci.edu/ml/datasets/Iris
 ##################
 
 import math as m
-import random
 import numpy as np
+
+#################
+# Local Packages
+#################
+from basic_ANN import read_data
+from basic_ANN import split_train_test
+from basic_ANN import initialize_weights
 
 __author__ = 'Adrien Baland'
 __date__ = '2016.11.17'  # Latest revision date
@@ -51,234 +47,66 @@ n_output = n_layers[-1]
 
 
 ########################################################################################################################
-# parse_line
-########################################################################################################################
-# Revision History:
-#   15-11-2016 AB - Function created
-########################################################################################################################
-def parse_line(datapoint):
-    """
-    Converts one split line of data into an array of value.
-    All columns are assumed to contain numerical values except class (no restriction).
-
-    INPUT:
-        datapoint (str[]) one row of data, with fields already split
-
-    OUTPUT:
-        ((float|int[])[]) list of all variable values as floats, followed by class value in alternate representation
-    """
-
-    try:
-
-        # Converts all non-class input values to float
-        all_entries = [float(datapoint[index_variable]) for index_variable in range(n_columns-1)]
-
-        datapoint_class = all_classes.index(datapoint[n_columns-1])
-        # Adds the class value (in alternate representation)
-        all_entries.append(datapoint_class)
-
-        # Returns converted values
-        ###################
-        return all_entries
-        ###################
-
-    # Ignore rows that couldn't be parsed
-    except Exception as e:
-
-        print('Could not parse following line %s : %s.' % (str(datapoint), str(e)))
-
-        # Failed to convert, so return failed status
-        ############
-        return None
-        ############
-
-#################
-# END parse_line
-#################
-
-
-########################################################################################################################
-# read_data
-########################################################################################################################
-# Revision History:
-#   15-11-2016 AB - Function created
-########################################################################################################################
-def read_data(file_url):
-    """
-    Reads and converts dataset to a list of list
-
-    INPUT:
-      file_url (str) : address for the dataset
-
-    OUTPUT:
-      (int|int[])[][] : converted data.
-    """
-
-    # Initializes the converted dataset to an empty list
-    all_data = []
-
-    with open(file_url, 'r') as input_file:
-
-        for input_file_line in input_file:
-
-            # Removes the \n at the end, and split each field
-            one_data_row = input_file_line[:-1].split(',')
-
-            # Convert splitted line to the data format
-            parsed_point = parse_line(one_data_row)
-
-            # Makes sure the conversion was successfull. It if was, add datapoint
-            if parsed_point is not None:
-
-                all_data.append(parsed_point)
-
-    ################
-    return all_data
-    ################
-
-################
-# END read_data
-################
-
-
-########################################################################################################################
-# split_train_test
-########################################################################################################################
-# Revision History:
-#   15-11-2016 AB - Function created
-########################################################################################################################
-def split_train_test(data, percentage):
-    """
-    Separates full dataset into a training part and a test part.
-
-    INPUT:
-        data ((float|int[])[][]) the full dataset, as a list of list of field (float or class representation)
-        percentage (int) percentage of the dataset to use for training data
-
-    OUTPUT:
-      (int|int[])[][] : training dataset.
-      (int|int[])[][] : test dataset.
-    """
-
-    # Computes number of entries to use for training part
-    i_split = int(m.floor(len(data) * percentage / 100))
-
-    # Randomizes the data before split, to make sure no ordering adds biases to dataset
-    random.shuffle(data)
-
-    # Separates the dataset
-    train = data[:i_split]
-    test = data[i_split:]
-
-    # Returns datasets into a np.array form.
-    #######################################
-    return np.array(train), np.array(test)
-    #######################################
-
-#######################
-# END split_train_test
-#######################
-
-
-########################################################################################################################
-# initialize_weights
-########################################################################################################################
-# Revision History:
-#   15-11-2016 AB - Function created
-########################################################################################################################
-def initialize_weights():
-    """
-    Initializes weights between layers. Makes the assumption that successive layers are fully connected
-
-    OUTPUT:
-        (np.random.rand[]) for each pair of successive layer, matrix with weights between nodes
-    """
-
-    # Initializes weight list
-    all_weights = []
-
-    for index_layer in range(len(n_layers)-1):
-
-        # Gets number of nodes in the current layer and the next one (dimensions of weight matrix)
-        n_node_current = n_layers[index_layer]
-        n_node_next = n_layers[index_layer+1]
-
-        # Initializes weight matrix as random.
-        layer_weights = np.random.rand(n_node_current, n_node_next)
-
-        # Appends the weight matrix to the list
-        all_weights.append(layer_weights)
-
-    ###################
-    return all_weights
-    ###################
-
-#########################
-# END initialize_weights
-#########################
-
-
-########################################################################################################################
 # activation
 ########################################################################################################################
 # Revision History:
-#   15-11-2016 AB - Function created
-#   17-11-2016 AB - Added Exception Catch
+#   20-11-2016 AB - Function created
 ########################################################################################################################
-def activation(x):
+def activation(pre_activation_values, is_last_layer):
     """
     Returns actvation function
 
     INPUT:
-        x (float) : activation input
+        x (float[]) : value vector before activation function is applied
 
     OUTPUT:
-        y (float) : activation value
+        y (float) : value vector before activation function is applied
     """
 
-    # Computes sigmoid
-    try:
-        y = 1. / (1. + m.exp(-x))
+    post_activation_values = np.zeros_like(pre_activation_values)
 
-    except OverflowError:
+    if is_last_layer:
 
-        y = 1 if x > 0 else 0
+        try:
+            denominator_softmax = sum([m.exp(x) for x in pre_activation_values])
 
-    #########
-    return y
-    #########
+        except OverflowError:
+
+            post_activation_values[np.argmax(pre_activation_values)] = 1.0
+
+            ##############################
+            return post_activation_values
+            ##############################
+
+        for node_index in range(len(post_activation_values)):
+
+            # Computes sigmoid
+            try:
+                post_activation_values[node_index] = m.exp(pre_activation_values[node_index]) / denominator_softmax
+
+            except OverflowError:
+
+                post_activation_values[node_index] = 1 if pre_activation_values[node_index] > 0 else 0
+
+    else:
+
+        for node_index in range(len(post_activation_values)):
+
+            # Computes sigmoid
+            try:
+                post_activation_values[node_index] = 1. / (1. + m.exp(-pre_activation_values[node_index]))
+
+            except OverflowError:
+
+                post_activation_values[node_index] = 1 if pre_activation_values[node_index] > 0 else 0
+
+    ##############################
+    return post_activation_values
+    ##############################
 
 #################
 # END activation
 #################
-
-
-########################################################################################################################
-# activation_derivative
-########################################################################################################################
-# Revision History:
-#   15-11-2016 AB - Function created
-########################################################################################################################
-def activation_derivative(x):
-    """
-    Returns derivative of activation function
-
-    INPUT:
-        x (float) : function input
-
-    OUTPUT:
-        y (float) : function value
-    """
-
-    y = activation(x) * (1. - activation(x))
-
-    #########
-    return y
-    #########
-
-############################
-# END activation_derivative
-############################
 
 
 ########################################################################################################################
@@ -305,15 +133,20 @@ def make_prediction(datapoint, all_weights):
     ###########
     # Computes the pre-activation value for initial layer
     pre_activation_values = [np.dot(datapoint, all_weights[0])]
-    post_activation_values = [np.copy(pre_activation_values[0])]
+    # If only 2 layers, we go straight to output layer, so use softmax immediately
+    is_last_layer = False
+    if len(n_layers) == 2:
 
-    # Computes post-activation value for initial layer
-    for index_node in range(len(post_activation_values[0])):
+        is_last_layer = True
 
-        post_activation_values[0][index_node] = activation(post_activation_values[0][index_node])
+    post_activation_values = [activation(pre_activation_values[0], is_last_layer)]
 
     # Recursive over hidden layer / output layer
     for index_layer in range(1, len(all_weights)):
+
+        if index_layer == len(all_weights) - 1:
+
+            is_last_layer = True
 
         # Gets previous layer output, which servers as input
         previous_layer_input = post_activation_values[index_layer-1]
@@ -322,11 +155,7 @@ def make_prediction(datapoint, all_weights):
         pre_activation_values.append(np.dot(previous_layer_input, all_weights[index_layer]))
         post_activation_values.append(np.copy(pre_activation_values[-1]))
 
-        # Applies activation function to get post-activation output
-        for index_node in range(len(post_activation_values[index_layer])):
-
-            post_activation_values[index_layer][index_node] = \
-                activation(post_activation_values[index_layer][index_node])
+        post_activation_values[index_layer] = activation(pre_activation_values[index_layer], is_last_layer)
 
     #####################################################
     return pre_activation_values, post_activation_values
@@ -364,9 +193,8 @@ def apply_backpropagation(datapoint, all_weights, all_weights_diff, _, post_acti
         (float[][]) input-node-independent part of weight update, for each successive layer
     """
 
-    predicted_class = post_activation_values[-1]
-
-    partial_de_dy = - (correct_class - predicted_class)
+    # Declares dE/dy (only for IDE purpose)
+    partial_de_dy = None
 
     # Comments below to explain indexing are made based on 1 input layer + 1 hidden + 1 output. More hidden layer does
     # not change the reasonning.
@@ -384,11 +212,19 @@ def apply_backpropagation(datapoint, all_weights, all_weights_diff, _, post_acti
             # post_activation_values[0] => layer_index - 2
             input_vector = post_activation_values[layer_index-2]
 
-        # Computes dE/dz_{k+1} as y_{k+1} * (1 - y_{k+1}) * dE/dy_{k+1}
-        # Indexing is the one used for input_vector, incremented by 1 => layer_index - 1
-        activation_derivative_value = \
-            post_activation_values[layer_index-1] * (1 - post_activation_values[layer_index-1])
-        partial_de_dz = activation_derivative_value * partial_de_dy
+        # Tests if we are currently using the ouptput layer. If we are, use cross-entropy dC/dz
+        if layer_index == len(n_layers) - 1:
+
+            predicted_class = post_activation_values[-1]
+            partial_de_dz = correct_class - predicted_class
+
+        else:
+
+            # Computes dE/dz_{k+1} as y_{k+1} * (1 - y_{k+1}) * dE/dy_{k+1}
+            # Indexing is the one used for input_vector, incremented by 1 => layer_index - 1
+            activation_derivative_value = \
+                post_activation_values[layer_index-1] * (1 - post_activation_values[layer_index-1])
+            partial_de_dz = activation_derivative_value * partial_de_dy
 
         # Weights updates between layer k and k+1 as dE/dw_{(k,i),(k+1,j)}
         all_weights_diff[layer_index-1] += np.ma.outerproduct(input_vector, partial_de_dz)
@@ -487,12 +323,17 @@ def test_model(data, all_weights):
         # Makes prediction for the current example
         datapoint = data[i_sample][0:n_columns-1]
         correct_class = int(data[i_sample][4])
-        correct_class_as_vector = out_true_all[correct_class]
         _, post_activation_values = make_prediction(datapoint, all_weights)
         output_class_prediction = post_activation_values[-1]
 
         # Checks if correct or not
-        total_error_value += np.linalg.norm(correct_class_as_vector - output_class_prediction)
+        try:
+
+            total_error_value -= m.log(output_class_prediction[correct_class])
+
+        except ValueError:
+
+            total_error_value = float('inf')
 
         if np.argmax(output_class_prediction) == correct_class:
 
@@ -519,6 +360,7 @@ def test_model(data, all_weights):
 ########################################################################################################################
 def main():
     global learning_rate
+    print('Starting basic_ANN_2')
 
     data = read_data(filename)
 
