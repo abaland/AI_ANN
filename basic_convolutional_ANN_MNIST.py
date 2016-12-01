@@ -1,32 +1,29 @@
 """
-This version is very similar to the previous basic_ANN script, with the exception that the output layer uses a softmax
- activation function and cross-entropy cost function instead of the (squarred-error, sigmoid) combination. The other
- hidden layer still use the latter combination.
-
-Dataset taken from http://archive.ics.uci.edu/ml/datasets/Iris
+This code trains handwritten character recognition (MNIST dataset) using a convolutional neural network.
 """
 
 ##################
 # Global Packages
 ##################
 
+import cPickle
+import gzip
 import math as m
 import numpy as np
 
-#################
-# Local Packages
-#################
-from basic_ANN import read_data
-from basic_ANN import split_train_test
-from basic_ANN import initialize_weights
-
 __author__ = 'Adrien Baland'
-__date__ = '2016.11.20'  # Latest revision date
+__date__ = '2016.11.17'  # Latest revision date
 
 
 ##################
 # Global Variables
 ##################
+
+# Load the dataset
+f = gzip.open('mnist.pkl.gz', 'rb')
+train_set, valid_set, test_set = cPickle.load(f)
+f.close()
+
 
 # Dataset specific pqrqmeters
 filename = 'iris.data'  # Name of the file containing data, to load
@@ -36,7 +33,7 @@ n_columns = 5  # Number of columns in dataset (including class (last column))
 
 percentage_split = 80  # Percentage of data split into training data
 
-learning_rate = .5  # Learning value value
+learning_rate = .01  # Learning value value
 iterations = 2000  # Number of iterations for algorithm
 
 # Number of layers. First is input layer, Last is output layer
@@ -286,7 +283,7 @@ def do_one_epoch(data, all_weights, batch_size):
 
             for layer_index in range(len(all_weights)):
 
-                all_weights[layer_index] -= learning_rate * all_weights_diffs[layer_index] / batch_size
+                all_weights[layer_index] -= learning_rate * all_weights_diffs[layer_index]
                 all_weights_diffs[layer_index].fill(0.)
 
             batch_count = 0

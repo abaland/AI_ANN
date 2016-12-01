@@ -2,18 +2,10 @@
 Applies the most basic type of ANN to the IRIS dataset using the Squared-error as a cost function and sigmoid as
 activation.
 
-Shows the huge important of learning rate depending on the batch-size for naive models (Squared error + sigmoid).
-For on-line learning, a learning rate of 1 gives realtively quick convergence.
-For batch of size above 10, the same learning rate throws the weight in a non-recoverable zone. A learning rate of
-    around 0.1 fixes the issue.
-For full-batch learning, the learning rate must be dropped to even less than 0.5.
-A good initial learning_rate here is 1 / n_batch
-
-The issue appears because the model ends up at a situation where either multiple sigmoid values are very close to 1
-(>0.99999) or all values are close to 0 (< 10^(-10), hence the gradient is trapped by the floating errors). If model had
-softmax function, that sort of issue disappears.
-
 Dataset taken from http://archive.ics.uci.edu/ml/datasets/Iris
+
+NOTE : since the dataset only contains 150 examples, splitting the dataset to have training, validation and test dataset
+is not so efficient. Because of this, only training and test dataset are taken, and a number of iterations is provided.
 """
 
 ##################
@@ -25,7 +17,7 @@ import random
 import numpy as np
 
 __author__ = 'Adrien Baland'
-__date__ = '2016.11.17'  # Latest revision date
+__date__ = '2016.11.19'  # Latest revision date
 
 
 ##################
@@ -450,7 +442,7 @@ def do_one_epoch(data, all_weights, batch_size):
 
             for layer_index in range(len(all_weights)):
 
-                all_weights[layer_index] -= learning_rate * all_weights_diffs[layer_index]
+                all_weights[layer_index] -= learning_rate * all_weights_diffs[layer_index] / batch_size
                 all_weights_diffs[layer_index].fill(0.)
 
             batch_count = 0
@@ -528,7 +520,7 @@ def main():
 
     for epoch in range(iterations):
 
-        do_one_epoch(train_data, all_weights, 1)
+        do_one_epoch(train_data, all_weights, 10)
 
         # Decreases learning rate every X iterations.
         if epoch % 20 == 19:
